@@ -1,5 +1,7 @@
 <img width="724" height="561" alt="image" src="https://github.com/user-attachments/assets/3765d1ce-4b61-4e7a-a14e-165ea2055f8d" />
 
+Here is my useful website that helps me during my exam: https://bijoy-chandra.github.io/EJPT-Preparation-and-Exam-Cheat-Sheet/index.html
+
 The eLearnSecurity Junior Penetration Tester (eJPT) certification is an entry-level penetration testing certification by INE Security (formerly eLearnSecurity). It validates practical skills in networking, reconnaissance, exploitation, and basic penetration testing methodology.
 
 This repository documents my preparation strategy, resources, tools, and real exam experience to help aspiring candidates.
